@@ -98,7 +98,7 @@ app.post("/api/login", async (req, res, next) => {
   } catch (error) {}
 });
 
-app.post("/api/conversation", async (req, res) => {
+app.post("/api/conversation", async (req, res) => { // Creates the conversation
   try {
     const { senderId, receiverId } = req.body;
     const newConversation = new Conversations({
@@ -111,7 +111,7 @@ app.post("/api/conversation", async (req, res) => {
   }
 });
 
-app.get("/api/conversations/:userId", async (req, res) => {
+app.get("/api/conversations/:userId", async (req, res) => { // Gives conversationId, and data of user chatting with us.
   try {
     const userId = req.params.userId;
     const conversations = await Conversations.find({
@@ -171,13 +171,14 @@ app.post("/api/message", async (req, res) => {
 app.get("/api/message/:conversationId", async (req, res) => {
   try {
     const conversationId = req.params.conversationId;
-    if (!conversationId) return res.status(200).json([]);
+    if (conversationId==='new') return res.status(200).json([]);
     const messages = await Messages.find({ conversationId });
     const messageUserData = Promise.all(
       messages.map(async (message) => {
         const user = await Users.findById(message.senderId);
         return {
           user: {
+            id: user._id,
             email: user.email,
             fullName: user.fullName,
           },

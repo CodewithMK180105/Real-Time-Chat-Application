@@ -126,6 +126,7 @@ app.get("/api/conversations/:userId", async (req, res) => { // Gives conversatio
         const user = await Users.findById(receiverId);
         return {
           user: {
+            receiverId: user._id,
             email: user.email,
             fullName: user.fullName,
           },

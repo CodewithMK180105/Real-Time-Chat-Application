@@ -35,7 +35,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/users`);
+        const res = await fetch(`http://localhost:8000/api/users/${user?.id}`);
         if (!res.ok) throw new Error("Failed to fetch users");
         const resData = await res.json();
         setUsers(resData);
@@ -50,7 +50,13 @@ const Dashboard = () => {
     console.log(conversationId, receiver);
     try {
       const res = await fetch(
-        `http://localhost:8000/api/message/${conversationId}`
+        `http://localhost:8000/api/message/${conversationId}?senderId=${user?.id}&receiverId=${receiver?.receiverId}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
       );
       if (!res.ok) throw new Error("Failed to fetch messages");
       const resData = await res.json();
@@ -61,15 +67,16 @@ const Dashboard = () => {
           senderId: msg.sender.id,
           message: msg.sender.message,
         })),
-        receiver: resData[0]?.receiver || receiver, // If receiver is available in the response, use it; otherwise, fall back to the passed receiver
+        receiver: resData[0]?.receiver || receiver, // Use the receiver from response or fallback to the passed receiver
         conversationId,
       });
   
-      console.log(resData); // Check the structure of the response
+      console.log("Response Data:", resData); // Check the structure of the response
     } catch (error) {
       console.error("Error fetching messages:", error.message);
     }
   };
+  
   
 
   const sendMessage = async () => {
@@ -84,7 +91,7 @@ const Dashboard = () => {
           conversationId: messages.conversationId,
           senderId: user?.id,
           message,
-          receiverId: messages?.receiver?.id,
+          receiverId: messages?.receiver?.receiverId,
         }),
       });
       if (!res.ok) throw new Error("Failed to send message");
@@ -100,7 +107,7 @@ const Dashboard = () => {
   return (
     <div className="w-screen flex">
       {/* Sidebar: Conversations */}
-      <div className="w-[25%] h-screen bg-secondary">
+      <div className="w-[25%] h-screen bg-secondary overflow-scroll">
         <div className="flex justify-center items-center my-6">
           <div className="border border-primary rounded-full">
             <img src={avatar} width={75} height={75} alt="profile pic" />

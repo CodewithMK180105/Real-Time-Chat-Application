@@ -144,9 +144,10 @@ app.get("/api/conversations/:userId", async (req, res) => { // Gives conversatio
 app.post("/api/message", async (req, res) => {
   try {
     const { conversationId, senderId, message, receiverId = "" } = req.body;
+    console.log(conversationId,senderId,message,receiverId);
     if (!senderId || !message)
       return res.status(400).send("Please fill all the required fields");
-    if (!conversationId && receiverId) {
+    if (conversationId==='new' && receiverId) {
       const newConversation = new Conversations({
         members: [senderId, receiverId],
       });
@@ -169,28 +170,91 @@ app.post("/api/message", async (req, res) => {
   }
 });
 
+// app.get("/api/message/:conversationId", async (req, res) => {
+//   try {
+//     const conversationId = req.params.conversationId;
+//     console.log("conv" + conversationId);
+
+//     // Return an empty array if the conversation is new
+//     if (conversationId === 'new'){
+//       const checkConversation =await Conversations.find({members:{$in: [req.body.senderId,req.body.receiverId]}});
+//       return res.status(200).json([]);
+//     }
+
+//     // Fetch the conversation to get participants
+//     const conversation = await Conversations.findById(conversationId);
+
+//     if (!conversation) {
+//       return res.status(404).json({ error: "Conversation not found" });
+//     }
+
+//     // Assuming `participants` is an array of user IDs [senderId, receiverId]
+//     const { members } = conversation;
+
+//     // Fetch all messages for the conversation
+//     const messages = await Messages.find({ conversationId });
+
+//     // Extract the receiver's ID (the one not matching the sender in each message)
+//     const messageReceiverData = await Promise.all(
+//       messages.map(async (message) => {
+//         const receiverId = members.find((id) => id !== message.senderId); // Get the receiver's ID
+
+//         // Fetch receiver's details
+//         const receiver = await Users.findById(receiverId);
+
+//         return {
+//           sender: {
+//             id: message.senderId,
+//             message: message.message,
+//           },
+//           receiver: {
+//             id: receiver._id,
+//             fullName: receiver.fullName,
+//             email: receiver.email,
+//           },
+//         };
+//       })
+//     );
+
+//     // Send the response
+//     res.status(200).json(messageReceiverData);
+//   } catch (error) {
+//     console.error("Error:", error);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
 app.get("/api/message/:conversationId", async (req, res) => {
   try {
     const conversationId = req.params.conversationId;
-    console.log("conv" + conversationId);
+    const { senderId, receiverId } = req.query;
 
-    // Return an empty array if the conversation is new
-    if (conversationId === 'new') return res.status(200).json([]);
+    console.log("Conversation ID:", conversationId);
+
+    // If the conversation is new
+    if (conversationId === "new") {
+      const checkConversation = await Conversations.find({
+        members: { $all: [senderId, receiverId] },
+      });
+      if (checkConversation.length > 0) {
+        return res.status(200).json([]);
+      } else {
+        return res.status(200).json([]);
+      }
+    }
 
     // Fetch the conversation to get participants
     const conversation = await Conversations.findById(conversationId);
-
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
     }
 
-    // Assuming `participants` is an array of user IDs [senderId, receiverId]
+    // Assuming `members` is an array of user IDs [senderId, receiverId]
     const { members } = conversation;
 
     // Fetch all messages for the conversation
     const messages = await Messages.find({ conversationId });
 
-    // Extract the receiver's ID (the one not matching the sender in each message)
+    // Extract sender and receiver data for each message
     const messageReceiverData = await Promise.all(
       messages.map(async (message) => {
         const receiverId = members.find((id) => id !== message.senderId); // Get the receiver's ID
@@ -222,17 +286,19 @@ app.get("/api/message/:conversationId", async (req, res) => {
 
 
 
-app.get("/api/users", async (req, res) => {
+
+app.get("/api/users/:userId", async (req, res) => {
   try {
-    const users = await Users.find();
+    const userId = req.params.userId;
+    const users = await Users.find({_id: {$ne: userId}}); // $ne: not equal to 
     const usersData = Promise.all(
       users.map(async (user) => {
         return {
           user: {
             email: user.email,
             fullName: user.fullName,
+            receiverId: user._id,
           },
-          userId: user._id,
         };
       })
     );

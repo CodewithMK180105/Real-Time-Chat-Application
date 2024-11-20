@@ -7,96 +7,99 @@ import { useEffect, useState } from "react";
 const Dashboard = () => {
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem("user:detail");
-    return storedUser ? JSON.parse(storedUser).user : null; // Access 'user' object inside the stored data
+    return storedUser ? JSON.parse(storedUser).user : null; // Parse stored user data
   });
+
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState({ receiver: null, messages: [] });
   const [message, setMessage] = useState("");
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
-    const loggedInUser = JSON.parse(localStorage.getItem("user:detail"));
-    if (!loggedInUser || !loggedInUser.user?.id) {
-      console.error("Invalid user data in localStorage");
-      return;
-    }
-
     const fetchConversations = async () => {
       try {
+        if (!user?.id) return; // Skip if user is not available
         const res = await fetch(
-          `http://localhost:8000/api/conversations/${loggedInUser.user.id}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
+          `http://localhost:8000/api/conversations/${user.id}`
         );
-        if (!res.ok) {
-          throw new Error(`Failed to fetch conversations: ${res.statusText}`);
-        }
+        if (!res.ok) throw new Error("Failed to fetch conversations");
         const resData = await res.json();
         setConversations(resData);
-        // console.log(resData);
       } catch (error) {
         console.error("Error fetching conversations:", error.message);
       }
     };
-
     fetchConversations();
+  }, [user]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/users`);
+        if (!res.ok) throw new Error("Failed to fetch users");
+        const resData = await res.json();
+        setUsers(resData);
+      } catch (error) {
+        console.error("Error fetching users:", error.message);
+      }
+    };
+    fetchUsers();
   }, []);
 
-  // console.log(conversations);
-
-  const fetchMessages = async (conversationId, user) => {
-    console.log("Conversation ", conversationId);
-    console.log("User ", user);
+  const fetchMessages = async (conversationId, receiver) => {
+    console.log(conversationId, receiver);
     try {
       const res = await fetch(
-        `http://localhost:8000/api/message/${conversationId}?userId=${user.id}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
+        `http://localhost:8000/api/message/${conversationId}`
       );
-      if (!res.ok) {
-        throw new Error(`Failed to fetch messages: ${res.statusText}`);
-      }
+      if (!res.ok) throw new Error("Failed to fetch messages");
       const resData = await res.json();
-      // console.log("Messages:", resData);
-      console.log("Receiver:", user);
-      setMessages({ messages: resData, receiver: user, conversationId }); // Directly set the response array
+  
+      // Ensure messages are set correctly
+      setMessages({
+        messages: resData.map((msg) => ({
+          senderId: msg.sender.id,
+          message: msg.sender.message,
+        })),
+        receiver: resData[0]?.receiver || receiver, // If receiver is available in the response, use it; otherwise, fall back to the passed receiver
+        conversationId,
+      });
+  
+      console.log(resData); // Check the structure of the response
     } catch (error) {
       console.error("Error fetching messages:", error.message);
     }
   };
-
-  // console.log(user);
-  // console.log(conversations);
-  // console.log(conversations.length);
-  // console.log(messages);
+  
 
   const sendMessage = async () => {
-    const res = await fetch(`http://localhost:8000/api/message`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        conversationId: messages?.conversationId,
-        senderId: user?.id,
-        message,
-        receiverId: messages?.receiver?.receiverId,
-      }),
-    });
-    // const reData=await res.json();
-    // console.log("SendMessage: "+reData);
-    setMessage("");
+    try {
+      if (!message.trim()) return;
+      const res = await fetch(`http://localhost:8000/api/message`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversationId: messages.conversationId,
+          senderId: user?.id,
+          message,
+          receiverId: messages?.receiver?.id,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to send message");
+      setMessage("");
+      fetchMessages(messages.conversationId, messages.receiver); // Refresh messages
+    } catch (error) {
+      console.error("Error sending message:", error.message);
+    }
   };
+
+  console.log(messages);
 
   return (
     <div className="w-screen flex">
+      {/* Sidebar: Conversations */}
       <div className="w-[25%] h-screen bg-secondary">
         <div className="flex justify-center items-center my-6">
           <div className="border border-primary rounded-full">
@@ -109,108 +112,68 @@ const Dashboard = () => {
         </div>
         <hr />
         <div className="mx-5 mt-5">
-          <div className="text-blue-600 mb-3 text-center">Messages</div>
-          <div>
-            {conversations.length > 0 ? (
-              conversations.map((conversation) => {
-                // console.log(conversation.conversationId);
-                return (
-                  <div
-                    key={conversation.user?.fullName} // Use conversation.name as the key for uniqueness
-                    className="flex items-center cursor-pointer p-3 border-b border-b-g(ray-300 rounded-lg hover:bg-gray-200"
-                    onClick={() =>
-                      fetchMessages(conversation.conversationId, user)
-                    }
-                  >
-                    <div
-                      className={`border border-primary rounded-full ${
-                        conversation.status === "active"
-                          ? "bg-primary"
-                          : "bg-light"
-                      }`}
-                    >
-                      <img
-                        src={avatar}
-                        width={50}
-                        height={50}
-                        alt="profile pic"
-                      />
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-xl">{conversation.user?.fullName}</h3>
-                      {/* Use the name property of conversation */}
-                      <p className="text-sm font-light">
-                        {conversation.user?.email}
-                      </p>
-                      {/* Use the status property */}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-center text-lg font-semibold mt-12">
-                No Messages
+          <h4 className="text-blue-600 mb-3 text-center">Messages</h4>
+          {conversations.length > 0 ? (
+            conversations.map(({ conversationId, user }) => (
+              <div
+                key={conversationId}
+                className="flex items-center cursor-pointer p-3 border-b border-gray-300 rounded-lg hover:bg-gray-200"
+                onClick={() => fetchMessages(conversationId, user)}
+              >
+                <div className="border border-primary rounded-full">
+                  <img src={avatar} width={50} height={50} alt="profile pic" />
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-xl">{user?.fullName}</h3>
+                  <p className="text-sm font-light">{user?.email}</p>
+                </div>
               </div>
-            )}
-          </div>
+            ))
+          ) : (
+            <p className="text-center text-lg font-semibold mt-12">
+              No Messages
+            </p>
+          )}
         </div>
       </div>
 
+      {/* Main Chat Area */}
       <div className="w-[50%] h-screen bg-white flex flex-col items-center">
-        {messages.messages.length > 0 &&
-          user?.id &&
-          (() => {
-            // Find the receiver based on the first message
-            const receiver = messages?.messages
-              .map(({ user }) => user)
-              .find(({ id }) => id !== user?.id);
-
-            return receiver ? (
-              <div className="w-[75%] bg-secondary h-[80px] mt-6 mb-6 rounded-full flex items-center px-14">
-                <div className="cursor-pointer">
-                  <img src={avatar} width={75} height={75} alt="profile pic" />
-                </div>
-                <div className="ml-6 mr-auto">
-                  <h3 className="text-lg">{receiver?.fullName}</h3>
-                  <p className="text-sm font-light text-gray-600">
-                    {receiver?.email}
-                  </p>
-                </div>
-                <div className="cursor-pointer">
-                  <VscCallOutgoing size={30} />
-                </div>
-              </div>
-            ) : (
-              <div className="w-[75%] bg-secondary h-[80px] mt-6 mb-6 rounded-full flex items-center px-14">
-                <p className="text-lg">You cant see their, until they accept your request </p>
-              </div>
-            );
-          })()}
-
-        <div className="h-[75%] w-full overflow-y-scroll">
-          <div className="p-10">
-            {messages?.messages?.length > 0 ? (
-              messages.messages.map(({ message, user: { id } = {}, _id }) => {
-                return (
-                  <div
-                    key={_id || id} // Use a unique identifier like _id or id
-                    className={`max-w-[40%] rounded-b-xl p-4 mb-6 ${
-                      id === user.id
-                        ? "bg-primary rounded-tl-xl ml-auto text-white"
-                        : "bg-secondary rounded-tr-xl"
-                    }`}
-                  >
-                    {message}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-center text-lg font-semibold mt-24">
-                No Messages or No Conversations Selected
-              </div>
-            )}
+        {messages.receiver && (
+          <div className="w-[75%] bg-secondary h-[80px] mt-6 mb-6 rounded-full flex items-center px-14">
+            <div>
+              <img src={avatar} width={75} height={75} alt="profile pic" />
+            </div>
+            <div className="ml-6 mr-auto">
+              <h3 className="text-lg">{messages.receiver?.fullName}</h3>
+              <p className="text-sm font-light text-gray-600">
+                {messages.receiver?.email}
+              </p>
+            </div>
+            <VscCallOutgoing size={30} />
           </div>
+        )}
+        <div className="h-[75%] w-full overflow-y-scroll p-10">
+          {messages.messages.length > 0 ? (
+            messages.messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`max-w-[40%] rounded-b-xl p-4 mb-6 ${
+                  msg.senderId === user.id
+                    ? "bg-primary rounded-tl-xl ml-auto text-white"
+                    : "bg-secondary rounded-tr-xl"
+                }`}
+              >
+                {msg.message}
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-lg font-semibold mt-24">
+              No Messages or No Conversations Selected
+            </p>
+          )}
         </div>
+
         {messages?.receiver?.fullName && (
           <div className="w-full flex items-center justify-evenly bg-white">
             <div className="p-2 w-[80%]">
@@ -238,7 +201,33 @@ const Dashboard = () => {
         )}
       </div>
 
-      <div className="w-[25%] h-screen bg-secondary"></div>
+      {/* Sidebar: Users */}
+      <div className="w-[25%] h-screen bg-secondary px-8 py-12 overflow-scroll">
+        <h4 className="text-primary text-lg">People</h4>
+        {users.length > 0 ? (
+          users.map(({ userId, user: userInfo }) => (
+            <div
+              key={userId}
+              className="flex items-center py-4 border-b border-gray-300 cursor-pointer"
+              onClick={() => fetchMessages("new", userInfo)}
+            >
+              <img
+                src={avatar}
+                className="w-[60px] h-[60] rounded-full p-[2px] border border-primary"
+                alt="profile"
+              />
+              <div className="ml-6">
+                <h3 className="text-lg font-semibold">{userInfo?.fullName}</h3>
+                <h3 className="text-sm font-light text-gray-600">
+                  {userInfo?.email}
+                </h3>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p>No Users Found</p>
+        )}
+      </div>
     </div>
   );
 };

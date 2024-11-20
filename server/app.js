@@ -172,26 +172,55 @@ app.post("/api/message", async (req, res) => {
 app.get("/api/message/:conversationId", async (req, res) => {
   try {
     const conversationId = req.params.conversationId;
-    if (conversationId==='new') return res.status(200).json([]);
+    console.log("conv" + conversationId);
+
+    // Return an empty array if the conversation is new
+    if (conversationId === 'new') return res.status(200).json([]);
+
+    // Fetch the conversation to get participants
+    const conversation = await Conversations.findById(conversationId);
+
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    // Assuming `participants` is an array of user IDs [senderId, receiverId]
+    const { members } = conversation;
+
+    // Fetch all messages for the conversation
     const messages = await Messages.find({ conversationId });
-    const messageUserData = Promise.all(
+
+    // Extract the receiver's ID (the one not matching the sender in each message)
+    const messageReceiverData = await Promise.all(
       messages.map(async (message) => {
-        const user = await Users.findById(message.senderId);
+        const receiverId = members.find((id) => id !== message.senderId); // Get the receiver's ID
+
+        // Fetch receiver's details
+        const receiver = await Users.findById(receiverId);
+
         return {
-          user: {
-            id: user._id,
-            email: user.email,
-            fullName: user.fullName,
+          sender: {
+            id: message.senderId,
+            message: message.message,
           },
-          message: message.message,
+          receiver: {
+            id: receiver._id,
+            fullName: receiver.fullName,
+            email: receiver.email,
+          },
         };
       })
     );
-    res.status(200).json(await messageUserData);
+
+    // Send the response
+    res.status(200).json(messageReceiverData);
   } catch (error) {
-    console.log("Error " + error);
+    console.error("Error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
+
+
 
 app.get("/api/users", async (req, res) => {
   try {

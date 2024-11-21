@@ -3,6 +3,7 @@ import avatar from "../../assets/avatar-svgrepo-com.svg";
 import { VscCallOutgoing } from "react-icons/vsc";
 import { LuSend } from "react-icons/lu";
 import { useEffect, useState } from "react";
+import { io } from 'socket.io-client';
 
 const Dashboard = () => {
   const [user, setUser] = useState(() => {
@@ -14,6 +15,28 @@ const Dashboard = () => {
   const [messages, setMessages] = useState({ receiver: null, messages: [] });
   const [message, setMessage] = useState("");
   const [users, setUsers] = useState([]);
+  const [socket, setSocket] = useState(null);
+
+  console.log("Messages: ",messages);
+
+  useEffect(() => {
+    const socket = io("http://localhost:9009");
+    setSocket(socket);
+  },[]);
+
+  useEffect(()=>{
+    socket?.emit('addUser',user?.id);
+    socket?.on('getUsers',users=>{
+      console.log(users);
+    })
+    socket?.on('getMessage', (data) => {
+      setMessages((prev) => ({
+        ...prev,
+        messages: [...prev.messages, { senderId: data.senderId, message: data.message }],
+      }));
+    });
+  },[socket])
+    
 
   useEffect(() => {
     const fetchConversations = async () => {
@@ -47,7 +70,7 @@ const Dashboard = () => {
   }, []);
 
   const fetchMessages = async (conversationId, receiver) => {
-    console.log(conversationId, receiver);
+    // console.log(conversationId, receiver);
     try {
       const res = await fetch(
         `http://localhost:8000/api/message/${conversationId}?senderId=${user?.id}&receiverId=${receiver?.receiverId}`,
@@ -82,6 +105,12 @@ const Dashboard = () => {
   const sendMessage = async () => {
     try {
       if (!message.trim()) return;
+      socket?.emit('sendMessage',{
+        conversationId: messages.conversationId,
+        senderId: user?.id,
+        message,
+        receiverId: messages?.receiver?.receiverId,
+      })
       const res = await fetch(`http://localhost:8000/api/message`, {
         method: "POST",
         headers: {
@@ -102,7 +131,7 @@ const Dashboard = () => {
     }
   };
 
-  console.log(messages);
+  // console.log(messages);
 
   return (
     <div className="w-screen flex">
